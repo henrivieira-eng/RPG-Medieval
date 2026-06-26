@@ -1,0 +1,373 @@
+import abc
+import random
+
+class LogMixin:
+    def log(self, mensagem):
+        print(f"[LOG {self.__class__.__name__}] {mensagem}")
+
+class Entidade(abc.ABC):
+    def __init__(self, nome):
+        self.nome = nome
+        self._vida = 100
+        self._vida_max = 100
+
+    @abc.abstractmethod
+    def calcular_dano(self):
+        pass
+
+    def atacar(self, alvo):
+        alvo.receber_dano(self.dano)
+        print(f"O {self.nome} atacou você!")
+
+    def receber_dano(self, dano):
+        self._vida -= dano
+
+        if self._vida < 0:
+            self._vida = 0
+
+class Personagem(Entidade):
+    def __init__(self, nome, arma=None, armadura=None, escudo=None):
+        super().__init__(nome)
+        self._moedas = 0
+        self._missao_ativa
+        self._arma = arma
+        self._armadura = armadura
+        self._escudo = escudo
+        self.inventario = Inventário()
+        self.forca = 0
+        self.resistencia = 0
+        self.agilidade = 0
+        self.inteligencia = 0
+
+    def adquirir_missao(self):
+        if self.missao_ativa is not None:
+            raise ValueError("Você tem uma missão pendente no momento.")
+        
+        else:
+            self.missao_ativa = Missão()
+
+    def comprar(self, loja, item):
+        if self._moedas >= item.preco:
+            self._moedas -= item.preco
+
+        else:
+            raise ValueError("Você não tem moedas suficientes.")
+
+        self.inventario + item
+        loja.remover_item(item)
+
+    def vender(self, loja, item):
+        self._moedas += item.preco
+        self.inventario - item
+        loja.adicionar_item(item)
+
+    def tomar_pocao(self, pocao):
+        self._vida += pocao.cura
+
+        if self._vida > self._vida_max:
+            self._vida = self._vida_max
+
+class Lutador(Personagem):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 180
+        self._vida_max = 180
+        self.forca = 10
+        self.resistencia = 9
+        self.agilidade = 5
+        self.inteligencia = 6
+
+    def calcular_dano(self):
+        return (2 * self.forca) + self.resistencia + (0.5 * self.agilidade) + (0.5 * self.inteligencia)
+
+    def atacar(self, alvo):
+        dano = self.calcular_dano()
+        alvo.receber_dano(dano)
+
+class Espadachim(Personagem):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 160
+        self._vida_max = 160
+        self.forca = 8
+        self.resistencia = 10
+        self.agilidade = 6
+        self.inteligencia = 7
+
+    def equipar(self, equipamento):
+        if (equipamento.tipo == "Espada") and self._arma is None:
+            self._arma = equipamento
+            
+            self.forca += equipamento.bonus_forca
+            self.resistencia += equipamento.bonus_resistencia
+            self.agilidade += equipamento.bonus_agilidade
+            self.inteligencia += equipamento.bonus_inteligencia
+
+        elif (equipamento.tipo == "Escudo") and self._escudo is None:
+            self._escudo = equipamento
+            
+            self.forca += equipamento.bonus_forca
+            self.resistencia += equipamento.bonus_resistencia
+            self.agilidade += equipamento.bonus_agilidade
+            self.inteligencia += equipamento.bonus_inteligencia
+
+    def desequipar(self, equipamento):
+        if (equipamento.tipo == "Espada") and self._arma is not None:
+            self._arma = None
+            
+            self.forca -= equipamento.bonus_forca
+            self.resistencia -= equipamento.bonus_resistencia
+            self.agilidade -= equipamento.bonus_agilidade
+            self.inteligencia -= equipamento.bonus_inteligencia
+
+        elif (equipamento.tipo == "Escudo") and self.escudo is not None:
+            self._escudo = None
+            
+            self.forca -= equipamento.bonus_forca
+            self.resistencia -= equipamento.bonus_resistencia
+            self.agilidade -= equipamento.bonus_agilidade
+            self.inteligencia -= equipamento.bonus_inteligencia
+
+    def calcular_dano(self):
+        return (1.5 * self.forca) + (1.5 * self.resistencia) + self.agilidade + (0.5 * self.inteligencia)
+
+    def atacar(self, alvo):
+        dano = self.calcular_dano()
+        alvo.receber_dano(dano)
+
+class Atirador(Personagem):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 140
+        self._vida_max = 140
+        self.forca = 7
+        self.resistencia = 7
+        self.agilidade = 8
+        self.inteligencia = 8
+
+    def equipar(self, equipamento):
+        if (equipamento.tipo == "Arma de fogo") and self._arma is None:
+            self._arma = equipamento
+            
+            self.forca += equipamento.bonus_forca
+            self.resistencia += equipamento.bonus_resistencia
+            self.agilidade += equipamento.bonus_agilidade
+            self.inteligencia += equipamento.bonus_inteligencia
+
+    def desequipar(self, equipamento):
+        if (equipamento.tipo == "Arma de fogo") and self._arma is not None:
+            self._arma = None
+            
+            self.forca -= equipamento.bonus_forca
+            self.resistencia -= equipamento.bonus_resistencia
+            self.agilidade -= equipamento.bonus_agilidade
+            self.inteligencia -= equipamento.bonus_inteligencia
+
+    def calcular_dano(self):
+        return self.forca + (0.5 * self.resistencia) + (2 * self.agilidade) + (1.5 * self.inteligencia)
+
+    def atacar(self, alvo):
+        dano = self.calcular_dano()
+        alvo.receber_dano(dano)
+
+class Arqueiro(Personagem):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 120
+        self._vida_max = 120
+        self.forca = 8
+        self.resistencia = 5
+        self.agilidade = 10
+        self.inteligencia = 7
+
+    def equipar(self, equipamento):
+        if (equipamento.tipo == "Arco e flechas") and self._arma is None:
+            self._arma = equipamento
+            
+            self.forca += equipamento.bonus_forca
+            self.resistencia += equipamento.bonus_resistencia
+            self.agilidade += equipamento.bonus_agilidade
+            self.inteligencia += equipamento.bonus_inteligencia
+
+    def desequipar(self, equipamento):
+        if (equipamento.tipo == "Arco e flechas") and self._arma is not None:
+            self._arma = None
+            
+            self.forca -= equipamento.bonus_forca
+            self.resistencia -= equipamento.bonus_resistencia
+            self.agilidade -= equipamento.bonus_agilidade
+            self.inteligencia -= equipamento.bonus_inteligencia
+
+    def calcular_dano(self):
+        return self.forca + (0.5 * self.resistencia) + (2.5 * self.agilidade) + self.inteligencia
+
+    def atacar(self, alvo):
+        dano = self.calcular_dano()
+        alvo.receber_dano(dano)
+
+class Feiticeiro(Personagem):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 100
+        self._vida_max = 100
+        self.forca = 6
+        self.resistencia = 8
+        self.agilidade = 6
+        self.inteligencia = 10
+
+    def equipar(self, equipamento):
+        if (equipamento.tipo == "Cajado") and self._arma is None:
+            self._arma = equipamento
+            
+            self.forca += equipamento.bonus_forca
+            self.resistencia += equipamento.bonus_resistencia
+            self.agilidade += equipamento.bonus_agilidade
+            self.inteligencia += equipamento.bonus_inteligencia
+
+    def desequipar(self, equipamento):
+        if (equipamento.tipo == "Cajado") and self._arma is not None:
+            self._arma = None
+            
+            self.forca -= equipamento.bonus_forca
+            self.resistencia -= equipamento.bonus_resistencia
+            self.agilidade -= equipamento.bonus_agilidade
+            self.inteligencia -= equipamento.bonus_inteligencia
+
+    def calcular_dano(self):
+        return (0.5 * self.forca) + self.resistencia + self.agilidade + (3 * self.inteligencia)
+
+    def atacar(self, alvo):
+        dano = self.calcular_dano()
+        alvo.receber_dano(dano)
+
+class Inimigo(Entidade):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self.dano = 0
+
+class Bandido(Inimigo):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 150
+        self._vida_max = 150
+        self.nome = "bandido"
+        self.dano = 20
+
+    def atacar(self, alvo):
+        super().atacar(alvo)
+
+    def receber_dano(self, dano):
+        return super().receber_dano(dano)
+    
+class Duende(Inimigo):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 125
+        self._vida_max = 125
+        self.nome = "duende"
+        self.dano = 25
+
+    def atacar(self, alvo):
+        super().atacar(alvo)
+
+    def receber_dano(self, dano):
+        return super().receber_dano(dano)
+    
+class Ogro(Inimigo):
+    def __init__(self, nome):
+        super().__init__(nome)
+        self._vida = 200
+        self._vida_max = 200
+        self.nome = "ogro"
+        self.dano = 30
+
+    def atacar(self, alvo):
+        super().atacar(alvo)
+
+    def receber_dano(self, dano):
+        return super().receber_dano(dano)
+    
+class Missão:
+    def __init__(self):
+        self.inimigos = ["bandidos", "duendes", "ogros"]
+        self.inimigo = random.choice(self.inimigos)
+        self.quantidade_inimigos = random.randint(2, 5)
+        self.descricao = f"Derrote {self.quantidade_inimigos} {self.inimigo}."
+        self.progresso = 0
+
+    def recompensa(self):
+        if self.quantidade_inimigos == 2:
+            return 20
+        
+        elif self.quantidade_inimigos == 3:
+            return 30
+
+        elif self.quantidade_inimigos == 4:
+            return 40
+        
+        elif self.quantidade_inimigos == 5:
+            return 50
+    
+    def progredir(self, jogador):
+        self.progresso += 1
+
+        if self.progresso == self.quantidade_inimigos:
+            jogador.moedas += self.recompensa
+            jogador.missao = None
+
+
+class Loja:
+    def __init__(self):
+        self._itens = []
+
+    def adicionar_item(self, item):
+        self._itens.append(item)
+
+    def remover_item(self, item):
+        if len(self._itens) == 0:
+            raise ValueError("Esse item não existe na loja.")
+            
+        else:
+            self._itens.remove(item)
+
+    def listar_itens(self):
+        if len(self._itens) == 0:
+            print("O estoque da loja está vazio.")
+        
+        else:
+            for item in self._itens:
+                print(f"{item.nome} | $ {item.preco}")
+
+class Inventário:
+    def __init__(self, capacidade):
+        self.capacidade = capacidade
+        self._itens = []
+
+    def __add__(self, other):
+        self.itens.append(other)
+        
+    def __sub__(self, other):
+        if len(self._itens) == 0:
+            raise ValueError("O inventário não pode ter uma quantidade negativa de itens.")
+            
+        else:
+            self._itens.remove(other)
+
+class Item:
+    def __init__(self, nome, preco, tipo):
+        self.nome = nome
+        self.preco = preco
+        self.tipo = tipo
+
+class Equipamento(Item):
+    def __init__(self, nome, preco, tipo, bonus_forca=0, bonus_resistencia=0, bonus_agilidade=0, bonus_inteligencia=0):
+        super().__init__(nome, preco, tipo)
+        self.bonus_forca = bonus_forca
+        self.bonus_resistencia = bonus_resistencia
+        self.bonus_agilidade = bonus_agilidade
+        self.bonus_inteligencia = bonus_inteligencia
+
+class Poção(Item):
+    def __init__(self, nome, preco, cura):
+        super().__init__(nome, preco)
+        self.cura = cura
