@@ -198,11 +198,18 @@ class Personagem(Entidade):
         
         Args:
             pocao (Poção): A poção a ser consumida.
+
+        Raises:
+            ValueError: se a vida do personagem estiver cheia
         """
 
-        self._vida += pocao.cura
-        if self._vida > self._vida_max:
-            self._vida = self._vida_max
+        if self._vida < self._vida_max:
+            self._vida += pocao.cura
+            if self._vida > self._vida_max:
+                self._vida = self._vida_max
+        
+        else:
+            raise ValueError("Sua vida está cheia.")
 
             self.log(f"O personagem tomou {pocao.nome}.")
 
