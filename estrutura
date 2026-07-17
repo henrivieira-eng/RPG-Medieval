@@ -1,25 +1,34 @@
 import abc
 import random
+import csv
 
 class LogMixin:
     """
-    Mixin que adiciona a funcionalidade de registro automático às classes.
+    Mixin que adiciona a funcionalidade de registro automático às classes e os salva em csv.
     """
+
+    ARQUIVO_LOG = "logs.csv"
 
     def log(self, mensagem):
-        print(f"[LOG {self._class.name_}] {mensagem}")
+        with open(self.ARQUIVO_LOG, "a", newline="", encoding="utf-8") as arquivo:
+            writer = csv.writer(arquivo)
 
-class Entidade(abc.ABC):
+            writer.writerow([
+                self.__class__.__name__,
+                mensagem
+            ])
+
+class Entidade(abc.ABC, LogMixin):
     """
     Classe abstrata que representa qualquer ser vivo no jogo (Personagem e Inimigo).
-   
+    
     Attributes:
         nome (str): Nome da entidade.
         _vida (int): Quantidade de vida atual da entidade.
         _vida_max (int): Vida máxima da entidade.
     """
 
-    def _init_(self, nome):
+    def __init__(self, nome):
         self.nome = nome
         self._vida = 100
         self._vida_max = 100
@@ -27,18 +36,19 @@ class Entidade(abc.ABC):
     def atacar(self, alvo):
         """
         Realiza um ataque contra outra entidade.
-       
+        
         Args:
             alvo (Entidade): A entidade que receberá o ataque.
         """
 
         alvo.receber_dano(self.dano)
-        print(f"O {self.nome} atacou você!")
+
+        self.log(f"{self.nome} atacou o personagem.")
 
     def receber_dano(self, dano):
         """
         Reduz a vida da entidade com base no dano recebido, respeitando o limite mínimo de 0.
-       
+        
         Args:
             dano (float): Quantidade de dano a ser subtraída da vida.
         """
@@ -47,11 +57,14 @@ class Entidade(abc.ABC):
         if self._vida < 0:
             self._vida = 0
 
-class Personagem(abc.ABC, Entidade):
+        self.log(f"{self.nome} recebeu {dano} pontos de dano.")
+
+class Personagem(Entidade):
     """
     Classe base para os heróis controlados pelo jogador. Herda de Entidade.
-   
+    
     Attributes:
+        saveid (None): Variável que futuramente armazenar-a o id de save.
         moedas (int): Quantidade de moedas que o personagem possui.
         _missao_ativa (Missão): Missão atual do personagem.
         _arma (Equipamento): Arma equipada do personagem.
@@ -64,14 +77,15 @@ class Personagem(abc.ABC, Entidade):
         inteligencia (int): Inteligência atual do personagem.
     """
 
-    def _init_(self, nome, arma=None, armadura=None, escudo=None):
-        super()._init_(nome)
-        self._moedas = 0
+    def __init__(self, nome, arma=None, armadura=None, escudo=None):
+        super().__init__(nome)
+        self.saveid = None
+        self._moedas = 100
         self._missao_ativa = None # Nota: Ajustado de self._missao_ativa para evitar erro de sintaxe
         self._arma = arma
         self._armadura = armadura
         self._escudo = escudo
-        self.inventario = Inventário(capacidade=15) # Nota: Adicionado um valor padrão de capacidade
+        self.inventario = Inventario() # Nota: Adicionado um valor padrão de capacidade
         self.forca = 0
         self.resistencia = 0
         self.agilidade = 0
@@ -89,16 +103,16 @@ class Personagem(abc.ABC, Entidade):
     def equipar(self, equipamento):
         """
         Equipa uma armadura ou arma ou escudo e soma os bônus aos atributos do personagem.
-       
+        
         Args:
             equipamento (Equipamento): O equipamento a ser equipado.
 
         Raises:
             ValueError: Se já houver um equipamento do mesmo tipo equipado ou se o equipamento não for compatível.
         """
-       
+        
         pass
-   
+    
     @abc.abstractmethod
     def desequipar(self, equipamento):
         """
@@ -110,13 +124,13 @@ class Personagem(abc.ABC, Entidade):
         Raises:
             ValueError: Se o equipamento não estiver equipado.
         """
-       
+        
         pass
 
     def adquirir_missao(self):
         """
         Atribui uma nova missão aleatória ao personagem.
-       
+        
         Raises:
             ValueError: Se o personagem já possuir uma missão em andamento.
         """
@@ -125,6 +139,8 @@ class Personagem(abc.ABC, Entidade):
             raise ValueError("Você tem uma missão pendente no momento.")
         else:
             self._missao_ativa = Missão()
+
+        self.log("O personagem adquiriu uma nova missão.")
 
     def aplicar_bonus(self, equipamento):
         self.forca += equipamento.bonus_forca
@@ -141,27 +157,29 @@ class Personagem(abc.ABC, Entidade):
     def comprar(self, loja, item):
         """
         Compra um item de uma loja, pagando o valor e adicionando-o ao inventário.
-       
+        
         Args:
             loja (Loja): A instância da loja onde o item está.
             item (Item): O item a ser comprado.
-           
+            
         Raises:
             ValueError: Se o personagem não tiver moedas suficientes.
         """
 
         if self._moedas >= item.preco:
             self._moedas -= item.preco
+            self.inventario + item
+            loja.remover_item(item)
+
+            self.log(f"O personagem comprou {item.nome}.")
+            self.log(f"{item.nome} foi adicionado(a) no inventário do personagem.")
         else:
             raise ValueError("Você não tem moedas suficientes.")
-
-        self.inventario + item
-        loja.remover_item(item)
 
     def vender(self, loja, item):
         """
         Vende um item do inventário para uma loja, recebendo o valor do item.
-       
+        
         Args:
             loja (Loja): A loja que receberá o item.
             item (Item): O item a ser vendido.
@@ -171,10 +189,13 @@ class Personagem(abc.ABC, Entidade):
         self.inventario - item
         loja.adicionar_item(item)
 
+        self.log(f"O personagem vendeu {item.nome}.")
+        self.log(f"{item.nome} foi removido(a) do inventário do personagem.")
+
     def tomar_pocao(self, pocao):
         """
         Consome uma poção para recuperar vida, respeitando o limite máximo do personagem.
-       
+        
         Args:
             pocao (Poção): A poção a ser consumida.
         """
@@ -183,15 +204,18 @@ class Personagem(abc.ABC, Entidade):
         if self._vida > self._vida_max:
             self._vida = self._vida_max
 
+            self.log(f"O personagem tomou {pocao.nome}.")
+
 class Lutador(Personagem):
     """
     Classe de Personagem focada em grande força.
     """
 
-    def _init_(self, nome):
-        super()._init_(nome)
+    def __init__(self, nome):
+        super().__init__(nome)
         self._vida = 180
         self._vida_max = 180
+        self._armadura = Equipamento("Armadura de couro", 0, "Armadura", 0, 1)
         self.forca = 10
         self.resistencia = 9
         self.agilidade = 5
@@ -203,6 +227,8 @@ class Lutador(Personagem):
                 self._armadura = equipamento
                 self.aplicar_bonus(equipamento)
 
+                self.log(f"O personagem equipou {equipamento.nome}.")
+
             else:
                 raise ValueError("Você já tem uma armadura equipada.")
 
@@ -213,7 +239,9 @@ class Lutador(Personagem):
         if equipamento.tipo == "Armadura" and self._armadura is not None:
             self._armadura = None
             self.remover_bonus(equipamento)
-       
+
+            self.log(f"O personagem desequipou {equipamento.nome}.")
+        
         else:
             raise ValueError("Você não tem esse equipamento equipado.")
 
@@ -224,15 +252,20 @@ class Lutador(Personagem):
         dano = self.calcular_dano()
         alvo.receber_dano(dano)
 
+        self.log(f"O personagem atacou {alvo.nome}.")
+
 class Espadachim(Personagem):
     """
     Classe de Personagem focada em alta resistência que utiliza espada e escudo.
     """
 
-    def _init_(self, nome):
-        super()._init_(nome)
+    def __init__(self, nome):
+        super().__init__(nome)
         self._vida = 160
         self._vida_max = 160
+        self._arma = Equipamento("Espada de bronze", 0, "Espada", 0, 1)
+        self._armadura = Equipamento("Armadura de couro", 0, "Armadura", 0, 1)
+        self._escudo = Equipamento("Escudo de madeira", 0, "Escudo", 0, 0.5)
         self.forca = 8
         self.resistencia = 10
         self.agilidade = 6
@@ -244,6 +277,8 @@ class Espadachim(Personagem):
                 self._armadura = equipamento
                 self.aplicar_bonus(equipamento)
 
+                self.log(f"O personagem equipou {equipamento.nome}.")
+
             else:
                 raise ValueError("Você já tem uma armadura equipada.")
 
@@ -252,13 +287,17 @@ class Espadachim(Personagem):
                 self._arma = equipamento
                 self.aplicar_bonus(equipamento)
 
+                self.log(f"O personagem equipou {equipamento.nome}.")
+
             else:
                 raise ValueError("Você já tem uma arma equipada.")
-       
+        
         elif equipamento.tipo == "Escudo":
             if self._escudo is None:
                 self._escudo = equipamento
                 self.aplicar_bonus(equipamento)
+
+                self.log(f"O personagem equipou {equipamento.nome}.")
 
             else:
                 raise ValueError("Você já tem um escudo equipado.")
@@ -271,13 +310,19 @@ class Espadachim(Personagem):
             self._armadura = None
             self.remover_bonus(equipamento)
 
-        if equipamento.tipo == "Espada" and self._arma is not None:
+            self.log(f"O personagem desequipou {equipamento.nome}.")
+
+        elif equipamento.tipo == "Espada" and self._arma is not None:
             self._arma = None
             self.remover_bonus(equipamento)
-       
+
+            self.log(f"O personagem desequipou {equipamento.nome}.")
+        
         elif equipamento.tipo == "Escudo" and self._escudo is not None:
             self._escudo = None
             self.remover_bonus(equipamento)
+
+            self.log(f"O personagem desequipou {equipamento.nome}.")
 
         else:
             raise ValueError("Você não tem esse equipamento equipado.")
@@ -289,16 +334,20 @@ class Espadachim(Personagem):
         dano = self.calcular_dano()
         alvo.receber_dano(dano)
 
+        self.log(f"O personagem atacou {alvo.nome}.")
+
 # Nota: Atirador, Arqueiro e Feiticeiro seguem a mesma documentação dos métodos "equipar" e "desequipar" presentes na classe Espadachim.
 class Atirador(Personagem):
     """
     Classe de personagem com atributos equilibrados que utiliza armas de fogo.
     """
 
-    def _init_(self, nome):
-        super()._init_(nome)
+    def __init__(self, nome):
+        super().__init__(nome)
         self._vida = 140
         self._vida_max = 140
+        self._arma = Equipamento("Pistola de mecha", 0, "Arma de fogo", 0.25, 0.25, 0.25, 0.25)
+        self._armadura = Equipamento("Armadura de couro", 0, "Armadura", 0, 1)
         self.forca = 7
         self.resistencia = 7
         self.agilidade = 8
@@ -310,6 +359,8 @@ class Atirador(Personagem):
                 self._armadura = equipamento
                 self.aplicar_bonus(equipamento)
 
+                self.log(f"O personagem equipou {equipamento.nome}.")
+
             else:
                 raise ValueError("Você já tem uma armadura equipada.")
 
@@ -317,6 +368,8 @@ class Atirador(Personagem):
             if self._arma is None:
                 self._arma = equipamento
                 self.aplicar_bonus(equipamento)
+
+                self.log(f"O personagem equipou {equipamento.nome}.")
 
             else:
                 raise ValueError("Você já tem uma arma equipada.")
@@ -329,13 +382,17 @@ class Atirador(Personagem):
             self._armadura = None
             self.remover_bonus(equipamento)
 
-        if equipamento.tipo == "Arma de fogo" and self._arma is not None:
+            self.log(f"O personagem desequipou {equipamento.nome}.")
+
+        elif equipamento.tipo == "Arma de fogo" and self._arma is not None:
             self._arma = None
             self.remover_bonus(equipamento)
 
+            self.log(f"O personagem desequipou {equipamento.nome}.")
+
         else:
             raise ValueError("Você não tem esse equipamento equipado.")
-       
+        
     def calcular_dano(self):
         return self.forca + (0.5 * self.resistencia) + (2 * self.agilidade) + (1.5 * self.inteligencia)
 
@@ -343,15 +400,19 @@ class Atirador(Personagem):
         dano = self.calcular_dano()
         alvo.receber_dano(dano)
 
+        self.log(f"O personagem atacou {alvo.nome}.")
+
 class Arqueiro(Personagem):
     """
     Classe de personagem focada em ótima agilidade.
     """
 
-    def _init_(self, nome):
-        super()._init_(nome)
+    def __init__(self, nome):
+        super().__init__(nome)
         self._vida = 120
         self._vida_max = 120
+        self._arma = Equipamento("Arco curto", 0, "Arco e flechas", 0, 0, 1)
+        self._armadura = Equipamento("Armadura de couro", 0, "Armadura", 0, 1)
         self.forca = 8
         self.resistencia = 5
         self.agilidade = 10
@@ -363,6 +424,8 @@ class Arqueiro(Personagem):
                 self._armadura = equipamento
                 self.aplicar_bonus(equipamento)
 
+                self.log(f"O personagem equipou {equipamento.nome}.")
+
             else:
                 raise ValueError("Você já tem uma armadura equipada.")
 
@@ -371,9 +434,11 @@ class Arqueiro(Personagem):
                 self._arma = equipamento
                 self.aplicar_bonus(equipamento)
 
+                self.log(f"O personagem equipou {equipamento.nome}.")
+
             else:
                 raise ValueError("Você já tem uma arma equipada.")
-       
+        
         else:
             raise ValueError("O equipamento não é compatível.")
 
@@ -382,10 +447,14 @@ class Arqueiro(Personagem):
             self._armadura = None
             self.remover_bonus(equipamento)
 
-        if equipamento.tipo == "Arco e flechas" and self._arma is not None:
+            self.log(f"O personagem desequipou {equipamento.nome}.")
+
+        elif equipamento.tipo == "Arco e flechas" and self._arma is not None:
             self._arma = None
             self.remover_bonus(equipamento)
-       
+        
+            self.log(f"O personagem desequipou {equipamento.nome}.")
+        
         else:
             raise ValueError("Você não tem esse equipamento equipado.")
 
@@ -396,15 +465,18 @@ class Arqueiro(Personagem):
         dano = self.calcular_dano()
         alvo.receber_dano(dano)
 
+        self.log(f"O personagem atacou {alvo.nome}.")
+
 class Feiticeiro(Personagem):
     """
     Classe de personagem focada em alta inteligência.
     """
 
-    def _init_(self, nome):
-        super()._init_(nome)
+    def __init__(self, nome):
+        super().__init__(nome)
         self._vida = 100
         self._vida_max = 100
+        self._arma = Equipamento("Bastão de madeira", 0, "Cajado", 0, 0, 0, 1)
         self.forca = 6
         self.resistencia = 8
         self.agilidade = 6
@@ -416,9 +488,11 @@ class Feiticeiro(Personagem):
                 self._arma = equipamento
                 self.aplicar_bonus(equipamento)
 
+                self.log(f"O personagem equipou {equipamento.nome}.")
+
             else:
                 raise ValueError("Você já tem uma arma equipada.")
-       
+        
         else:
             raise ValueError("O equipamento não é compatível.")
 
@@ -426,6 +500,8 @@ class Feiticeiro(Personagem):
         if equipamento.tipo == "Cajado" and self._arma is not None:
             self._arma = None
             self.remover_bonus(equipamento)
+
+            self.log(f"O personagem desequipou {equipamento.nome}.")
 
         else:
             raise ValueError("Você não tem esse equipamento equipado.")
@@ -437,41 +513,43 @@ class Feiticeiro(Personagem):
         dano = self.calcular_dano()
         alvo.receber_dano(dano)
 
+        self.log(f"O personagem atacou {alvo.nome}.")
+
 class Inimigo(Entidade):
     """
     Classe base para os oponentes do jogo. Herda de Entidade.
     """
 
-    def _init_(self, nome):
-        super()._init_(nome)
+    def __init__(self, nome):
+        super().__init__(nome)
         self.dano = 0
 
 # Nota: Bandido, Duende e Ogro herdam o comportamento padrão de Inimigo.
 class Bandido(Inimigo):
-    def _init_(self, nome="bandido"):
-        super()._init_(nome)
+    def __init__(self, nome="Bandido"):
+        super().__init__(nome)
         self._vida = 150
         self._vida_max = 150
         self.dano = 20
-   
+    
 class Duende(Inimigo):
-    def _init_(self, nome="duende"):
-        super()._init_(nome)
+    def __init__(self, nome="Duende"):
+        super().__init__(nome)
         self._vida = 125
         self._vida_max = 125
         self.dano = 25
-   
+    
 class Ogro(Inimigo):
-    def _init_(self, nome="ogro"):
-        super()._init_(nome)
+    def __init__(self, nome="Ogro"):
+        super().__init__(nome)
         self._vida = 200
         self._vida_max = 200
         self.dano = 30
-   
-class Missão:
+    
+class Missão(LogMixin):
     """
     Representa uma missão gerada aleatoriamente que o jogador pode cumprir para ganhar moedas.
-   
+    
     Attributes:
         inimigos (list): Qual tipo de inimigo deve ser derrotado.
         quantidade_inimigos (int): Quantos inimigos devem ser derrotados.
@@ -479,7 +557,7 @@ class Missão:
         progresso (int): Quantos inimigos já foram derrotados.
     """
 
-    def _init_(self):
+    def __init__(self):
         self.inimigos = ["bandidos", "duendes", "ogros"]
         self.inimigo = random.choice(self.inimigos)
         self.quantidade_inimigos = random.randint(2, 5)
@@ -492,29 +570,36 @@ class Missão:
         """
 
         return self.quantidade_inimigos * 10
-   
+    
     def progredir(self, jogador):
         """
         Incrementa o progresso da missão. Se concluída, premia o jogador com moedas.
-       
+        
         Args:
             jogador (Personagem): O herói que está realizando a missão.
         """
 
         self.progresso += 1
+
+        self.log(f"O personagem progrediu na missão atual.")
+
         if self.progresso == self.quantidade_inimigos:
             jogador._moedas += self.recompensa()
             jogador._missao_ativa = None
 
-class Loja:
+            self.log(f"O personagem completou uma missão.")
+
+class Loja(LogMixin):
     """
     Gerencia um catálogo de itens que podem ser comprados pelo jogador e que o jogador pode vender posteriormente.
-   
+    
     Attributes:
+        nome (str): Nome da loja de acordo com o que ela vende (Arsenal, Armaduraria, Botica)
         _itens (list): Lista de itens disponíveis na loja.
     """
 
-    def _init_(self):
+    def __init__(self, nome):
+        self.nome = nome
         self._itens = []
 
     def adicionar_item(self, item):
@@ -523,6 +608,8 @@ class Loja:
         """
 
         self._itens.append(item)
+
+        self.log(f"{item.nome} foi adicionado(a) na loja.")
 
     def remover_item(self, item):
         """
@@ -534,31 +621,35 @@ class Loja:
         else:
             self._itens.remove(item)
 
-    def listar_itens(self):
+            self.log(f"{item.nome} foi removido(a) da loja.")
+
+    def listar_itens(self) -> None:
         """
         Exibe todos os itens disponíveis e seus respectivos preços.
         """
 
-        if len(self._itens) == 0:
-            print("O estoque da loja está vazio.")
-        else:
-            for item in self._itens:
-                print(f"{item.nome} | $ {item.preco}")
+    def listar_itens(self):
 
-class Inventário:
+        if len(self._itens) == 0:
+            return None
+
+        for i, item in enumerate(self._itens, start=1):
+            print(f"{i} | {item.nome} | $ {item.preco}")
+
+class Inventario:
     """
     Controla o armazenamento de itens coletados pelo personagem através de sobrecarga de operadores.
-   
+    
     Attributes:
         capacidade (int): Quantidade de itens que podem ser guardados pelo personagem.
         _itens (list): Lista de itens guardados pelo personagem.
     """
 
-    def _init_(self):
+    def __init__(self):
         self.capacidade = 15
         self._itens = []
 
-    def _add_(self, other):
+    def __add__(self, other):
         """
         Permite adicionar itens usando o operador "+" (ex: inventario + item).
         """
@@ -566,8 +657,8 @@ class Inventário:
         if len(self._itens) >= self.capacidade:
             raise ValueError("Inventário cheio!")
         self._itens.append(other)
-       
-    def _sub_(self, other):
+        
+    def __sub__(self, other):
         """
         Permite remover itens usando o operador "-" (ex: inventario - item).
         """
@@ -587,7 +678,7 @@ class Item:
         tipo (str): Tipo do item (arma/armadura/escudo).
     """
 
-    def _init_(self, nome, preco, tipo):
+    def __init__(self, nome, preco, tipo):
         self.nome = nome
         self.preco = preco
         self.tipo = tipo
@@ -597,14 +688,14 @@ class Equipamento(Item):
     Representa armas ou armaduras que alteram os atributos das classes de Personagem.
     """
 
-    def _init_(self, nome, preco, tipo, bonus_forca=0, bonus_resistencia=0, bonus_agilidade=0, bonus_inteligencia=0):
-        super()._init_(nome, preco, tipo)
+    def __init__(self, nome, preco, tipo, bonus_forca=0, bonus_resistencia=0, bonus_agilidade=0, bonus_inteligencia=0):
+        super().__init__(nome, preco, tipo)
         self.bonus_forca = bonus_forca
         self.bonus_resistencia = bonus_resistencia
         self.bonus_agilidade = bonus_agilidade
         self.bonus_inteligencia = bonus_inteligencia
 
-class Poção(Item):
+class Pocao(Item):
     """
     Representa consumíveis de cura de vida.
 
@@ -613,5 +704,5 @@ class Poção(Item):
     """
 
     def _init_(self, nome, preco, cura):
-        super()._init_(nome, preco, tipo="Poção")
+        super()._init_(nome, preco, "Poção")
         self.cura = cura
